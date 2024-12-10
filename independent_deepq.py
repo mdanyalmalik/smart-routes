@@ -18,9 +18,9 @@ plt.style.use('dark_background')
 class DQN(nn.Module):
     def __init__(self, state_size, num_actions):
         super(DQN, self).__init__()
-        self.fc1 = nn.Linear(state_size+num_actions, 24)
+        self.fc1 = nn.Linear(state_size, 24)
         self.fc2 = nn.Linear(24, 24)
-        self.fc3 = nn.Linear(24, 1)
+        self.fc3 = nn.Linear(24, num_actions)
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
@@ -36,9 +36,10 @@ class Agent:
         self.num_players = num_players
         self.state_size = state_size
         self.action_size = num_players
+        self.memory = deque(maxlen=2000)
         self.model = DQN(state_size, num_actions)
         self.target_model = DQN(state_size, num_actions)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=5e-4)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=3e-4)
 
     def done(self, state):
         return state[-1][self.id] == 1
@@ -51,19 +52,11 @@ class IndependentDeepQ:
         self.action_size = num_players
         self.agents = [Agent(num_players, state_size, num_actions, i)
                        for i in range(num_players)]
-        self.num_actions = num_actions
         self.graph = graph
         self.gamma = 0.95
         self.epsilon = 1
         self.epsilon_min = 0.01
         self.epsilon_decay = 0.995
-
-    def get_input(self, state, action):
-        inp_state = torch.tensor(state.flatten()).float()
-        # make one hot vector for action
-        inp_action = torch.zeros(self.num_actions)
-        inp_action[action] = 1
-        return torch.concat((inp_state, inp_action), 0)
 
     def get_action_sets(self, state):
         action_sets = []
@@ -78,21 +71,16 @@ class IndependentDeepQ:
     def get_action_values(self, state, actionsets):
         action_values = []
         for i in range(self.num_players):
-            action_values_i = []
-            for j in range(self.num_actions):
-                # ignore invalid actions
+            inp = torch.tensor(state.flatten()).float()
+            with torch.no_grad():
+                out = self.agents[i].model(inp)
+            out = out.detach().numpy()
+            # remove invalid actions
+            for j in range(len(out)):
                 if self.graph.edges[j] not in actionsets[i]:
-                    action_values_i.append(-np.inf)
-                    continue
+                    out[j] = -np.inf
 
-                inp = self.get_input(state, j)
-                with torch.no_grad():
-                    out = self.agents[i].model(inp)
-                out = out.detach().numpy()[0]
-
-                action_values_i.append(out)
-
-            action_values.append(action_values_i)
+            action_values.append(out)
 
         return action_values
 
@@ -138,23 +126,6 @@ class IndependentDeepQ:
 
         return actions_index, actions, rewards, next_state
 
-    def get_next_values(self, next_state, i):
-        next_values = []
-        actionset = self.get_action_sets(next_state)[i]
-        for j in range(self.num_actions):
-            # ignore invalid actions
-            if self.graph.edges[j] not in actionset:
-                next_values.append(-np.inf)
-                continue
-
-            inp = self.get_input(next_state, j)
-            with torch.no_grad():
-                out = self.agents[i].target_model(inp)
-            out = out.detach().numpy()[0]
-            next_values.append(out)
-
-        return torch.tensor(np.array(next_values))
-
     def done(self, state):
         return (state[-1] == np.ones(self.num_players)).all()
 
@@ -162,18 +133,24 @@ class IndependentDeepQ:
         for i in range(self.num_players):
             if self.agents[i].done(state):
                 continue
-
-            inp = self.get_input(state, actions_index[i])
-
+            inp = torch.tensor(state.flatten()).float()
             if self.agents[i].done(next_state):
-                target = torch.tensor([rewards[i]]).float()
+                target = rewards[i]
             else:
-                next_values = self.get_next_values(next_state, i)
-                target = torch.tensor([rewards[i] + self.gamma *
-                                      torch.max(next_values)]).float()
-
+                with torch.no_grad():
+                    next_values = self.agents[i].target_model(
+                        torch.tensor(next_state.flatten()).float())
+                # remove invalid actions
+                for j in range(len(next_values)):
+                    if self.graph.edges[j] not in self.get_action_sets(next_state)[i]:
+                        next_values[j] = -np.inf
+                target = rewards[i] + self.gamma * \
+                    torch.max(next_values)
+            with torch.no_grad():
+                target_f = self.agents[i].target_model(inp)
+            target_f[actions_index[i]] = target
             self.agents[i].optimizer.zero_grad()
-            loss = F.mse_loss(self.agents[i].model(inp), target)
+            loss = F.mse_loss(self.agents[i].model(inp), target_f)
             loss.backward()
             self.agents[i].optimizer.step()
 
@@ -184,27 +161,10 @@ class IndependentDeepQ:
             state[0][i] = 1
         done = False
         while not done:
-            path = []
-            done = self.done(state)
-            actionsets = self.get_action_sets(state)
-            actionvalues = self.get_action_values(state, actionsets)
-
-            for i in range(self.num_players):
-                if self.agents[i].done(state):
-                    path.append(None)
-                    continue
-                path.append(self.graph.edges[np.argmax(actionvalues[i])])
-
-            next_state = np.zeros((self.graph.num_nodes(), self.num_players))
-            for i in range(self.num_players):
-                if self.agents[i].done(state):
-                    next_state[-1][i] = 1
-                    continue
-                next_state[path[i].end_node][i] = 1
-
+            actions_index, actions, rewards, next_state = self.act(state)
+            paths.append(actions)
+            done = self.done(next_state)
             state = next_state
-
-            paths.append(path)
 
         player_paths = [[] for i in range(self.num_players)]
         for path in paths:
@@ -247,7 +207,6 @@ class IndependentDeepQ:
 
             if e % 100 == 0:
                 print(f"Episode: {e}, Average cost: {avg_cost}")
-                print(f"Epsilon: {self.epsilon}\n")
 
         print(self.compute_paths())
 
@@ -289,4 +248,5 @@ eps = np.array(eps)
 eps = eps.reshape(-1, 100)
 eps = np.mean(eps, axis=1)
 plt.plot(eps, avg_costs)
+
 plt.show()
