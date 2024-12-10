@@ -1,3 +1,7 @@
+import random
+import inspect
+
+
 class Edge:
     def __init__(self, start_node, end_node, weight):
         self.edge_id = None
@@ -6,7 +10,9 @@ class Edge:
         self.weight = weight
 
     def __repr__(self):
-        return f"Edge({self.start_node}, {self.end_node})"
+        # get function string
+        weight_str = inspect.getsource(self.weight)
+        return f"Edge({self.start_node}, {self.end_node}, {weight_str})"
 
 
 class Graph:
