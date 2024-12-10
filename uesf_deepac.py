@@ -10,8 +10,6 @@ from graph_model import Graph, Edge, create_braes_network
 
 from matplotlib import pyplot as plt
 
-plt.style.use('dark_background')
-
 
 class ActionValueNetwork(nn.Module):
     def __init__(self, state_size, num_actions, hidden_size=8):
@@ -320,7 +318,20 @@ ac = UESF(graph, num_players, state_size, num_actions)
 
 eps, avg_costs = ac.train(1000)
 
+plt.title("Deep Equilibrium Selection")
 plt.plot(eps, avg_costs)
 plt.xlabel("Episodes")
 plt.ylabel("Avg Cost")
+
+# on the same graph, plot a lower granularity version of the same data
+# by averaging over 100 episodes
+avg_costs = np.array(avg_costs)
+avg_costs = avg_costs.reshape(-1, 100)
+avg_costs = np.mean(avg_costs, axis=1)
+eps = np.array(eps)
+eps = eps.reshape(-1, 100)
+eps = np.mean(eps, axis=1)
+plt.plot(eps, avg_costs)
+
+plt.savefig("deep_es.pdf", bbox_inches='tight')
 plt.show()

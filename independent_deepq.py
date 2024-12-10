@@ -9,8 +9,6 @@ from graph_model import Graph, Edge, create_braes_network
 
 from matplotlib import pyplot as plt
 
-plt.style.use('dark_background')
-
 # Define the independent DQN for marl
 # input is the state of the graph and actions of the other players
 
@@ -235,6 +233,7 @@ deepq = IndependentDeepQ(graph, num_players, state_size, num_actions)
 
 avg_costs, eps = deepq.train(1000)
 # plot costs
+plt.title("Independent Deep Q Learning")
 plt.plot(eps, avg_costs)
 plt.xlabel("Episodes")
 plt.ylabel("Average cost")
@@ -249,4 +248,5 @@ eps = eps.reshape(-1, 100)
 eps = np.mean(eps, axis=1)
 plt.plot(eps, avg_costs)
 
+plt.savefig("iql_graph.pdf", bbox_inches='tight')
 plt.show()

@@ -59,7 +59,7 @@ class Group:
         self.state_size = state_size
         self.model = DQN(state_size, num_actions)
         self.target_model = DQN(state_size, num_actions)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=1e-3)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=1e-2)
         self.players = [Agent(i, group_id) for i in range(
             group_id*num_players_group, (group_id+1)*num_players_group)]
 
@@ -383,13 +383,13 @@ for i in range(num_players):
 
 state_size = graph.num_nodes()
 num_actions = graph.num_edges()
-deepq = MeanFieldDeepQ(graph, num_players, state_size, num_actions, 2)
+deepq = MeanFieldDeepQ(graph, num_players, state_size, num_actions, 5)
 
-avg_costs, eps = deepq.train(600)
+avg_costs, eps = deepq.train(1000)
 
 avg_costs = np.array(avg_costs)
-avg_costs = np.clip(avg_costs, 0, 10)
 # plot costs
+plt.title("Mean Field Deep Q Learning")
 plt.plot(eps, avg_costs)
 plt.xlabel("Episodes")
 plt.ylabel("Average cost")
@@ -397,12 +397,12 @@ plt.ylabel("Average cost")
 # on the same graph, plot a lower granularity version of the same data
 # by averaging over 100 episodes
 avg_costs = np.array(avg_costs)
-avg_costs = avg_costs.reshape(-1, 10)
+avg_costs = avg_costs.reshape(-1, 100)
 avg_costs = np.mean(avg_costs, axis=1)
 eps = np.array(eps)
-eps = eps.reshape(-1, 10)
+eps = eps.reshape(-1, 100)
 eps = np.mean(eps, axis=1)
-plt.plot(eps[1:], avg_costs[1:])
+plt.plot(eps, avg_costs)
 
-
+plt.savefig("mean_field_deepq.pdf", bbox_inches='tight')
 plt.show()

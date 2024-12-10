@@ -7,6 +7,8 @@ graph = create_braes_network()
 # Parameters
 num_players = 10
 # Each path is represented as a list of edges (edge indices)
+
+# paths for adapted braess network
 player_paths = [
     [0, 3],       # Path 1: Sequence of edges [0, 3]
     [0, 2, 4],    # Path 2: Sequence of edges [0, 2, 4]
