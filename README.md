@@ -29,6 +29,10 @@ On the adapted Braess network:
 
 DES converges to the global optimum, while the baseline approaches converge to higher-cost solutions. The modified reward structure also makes the globally optimal configuration a stable Nash Equilibrium under the new incentives.
 
+<p align="center">
+  <img src="figures/des_convergence.png" alt="Deep Equilibrium Selection convergence" width="400">
+</p>
+
 ## Report
 
 📄 **[Read the full project report](https://drive.google.com/file/d/1WdXNCeDgPuFRB66CTD8Zs3Gcfh4PFiuk/view)**
